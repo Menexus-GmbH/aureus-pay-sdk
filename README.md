@@ -16,7 +16,7 @@ npm install aureus-pay
 ## 🚀 Quick Start (5 minutes)
 
 ### 1. Get Your API Key
-1. Download the [Aureus Wallet App](https://https://aureus.money/)
+1. Download the [Aureus Wallet App]([https://https://aureus.money/](https://www.aureus.money/))
 2. Go to **Settings** → **Developer** → **Generate API Key**
 3. Copy your API key
 
