@@ -5,6 +5,56 @@ Enable USDC/USDT payments on Hedera and EVM chains with just a few lines of code
 
 ---
 
+## 🏗️ Account Architecture
+
+Understanding how Aureus manages accounts:
+
+### Personal Account
+When you sign up, you get:
+- **Hedera (HTS) Wallet** - Your personal crypto wallet
+- **Nostr Profile** - Decentralized identity
+- *Optional:* **EVM Wallets** - Create wallets on Ethereum, Polygon, Base, Arbitrum, Optimism, etc.
+
+### Business Account
+When you create a business, you get:
+- **Hedera Multi-Sig Account (HTS)** 
+  - Signed with your personal HTS private key
+  - Invite team members for multi-signature security
+  - Primary account for receiving crypto payments
+
+- **Safe Global Multi-Sig Wallets**
+  - EVM-compatible (Ethereum, Polygon, Base, etc.)
+  - Signed with your personal EVM wallet keys
+  - Multi-chain payment support
+
+- **Business Nostr Profile**
+  - Used for business identity and authentication
+  - Sign in to business account with Nostr private key
+
+### API Key Authentication
+- API keys are **Business Account specific**
+- Generated in: Business Settings → Aureus Pay → API Key
+- Used to authenticate payment requests via SDK
+- Each business can have separate API keys
+
+```
+Personal Account (Google/Apple/Email)
+    ├── Hedera (HTS) Wallet
+    ├── Nostr Profile  
+    └── EVM Wallets (Optional)
+         └── Ethereum, Polygon, Base, etc.
+
+Business Account (Multi-Sig)
+    ├── Hedera Multi-Sig (HTS)
+    │    └── Signed with Personal HTS Key
+    ├── Safe Global EVM Multi-Sig
+    │    └── Signed with Personal EVM Keys
+    ├── Business Nostr Profile
+    └── API Keys (for SDK)
+```
+
+---
+
 ## 📦 Installation
 
 ```bash
@@ -16,9 +66,31 @@ npm install aureus-pay
 ## 🚀 Quick Start (5 minutes)
 
 ### 1. Get Your API Key
+
+**Step 1: Create Your Account**
 1. Download the [Aureus Wallet App](https://aureus.money)
-2. Go to **Settings** → **Developer** → **Generate API Key**
-3. Copy your API key
+2. Sign up with Google, Apple, or Email
+   - Your personal Hedera (HTS) account is created automatically
+   - Your Nostr profile is generated
+
+**Step 2: Create a Business Account**
+1. In the app, go to **Business** → **Create Business Account**
+2. Your business gets:
+   - ✅ **Hedera Multi-Sig Account** (HTS) - signed with your personal HTS key
+   - ✅ **Safe Global EVM Wallets** - multi-chain support (Ethereum, Polygon, Base, etc.)
+   - ✅ **Nostr Account** - for business identity
+3. *Optional:* Invite team members to the multi-sig
+
+**Step 3: Generate API Key**
+1. **Log in as your Business** (switch from personal to business account)
+2. Go to **Settings** → **Aureus Pay** → **API Key**
+3. Click **Generate API Key**
+4. Copy the key (keep it secure!)
+
+> ⚠️ **Important:** 
+> - API keys are tied to your **Business Account**, not your personal account
+> - You must be logged into your business to generate/use API keys
+> - Multi-sig business accounts provide enhanced security for payment processing
 
 ### 2. Create Your First Payment
 
@@ -367,46 +439,98 @@ app.listen(3000);
 
 ## 🔒 Security
 
+### API Key Security
 - **Never expose your API key** in client-side code
 - **Always validate** payment confirmation on your backend
-- **Use webhooks** (coming soon) for production reliability
 - **Store API keys** in environment variables
+- **Rotate keys regularly** from business settings
 
 ```bash
 # .env file
-AUREUS_API_KEY=your_api_key_here
+AUREUS_API_KEY=your_business_api_key_here
 ```
+
+### Multi-Signature Security
+Business accounts use multi-sig for enhanced security:
+
+**Hedera Multi-Sig (HTS)**
+- Requires signatures from authorized team members
+- Configurable threshold (e.g., 2 of 3 signatures required)
+- All payment settlements go through multi-sig verification
+
+**Safe Global Multi-Sig (EVM)**
+- Industry-standard multi-sig wallet protocol
+- Team member management with customizable permissions
+- Secure cross-chain payment processing
+
+### Best Practices
+- ✅ Use **business accounts** for production payments
+- ✅ Invite trusted team members to multi-sig
+- ✅ Set appropriate signature thresholds
+- ✅ Monitor payment activity in business dashboard
+- ✅ Keep your Nostr private key secure (for business login)
+- ❌ Never share business Nostr private key
+- ❌ Don't use personal accounts for business payments
 
 ---
 
 ## 🌍 Supported Networks
 
-- ✅ **Hedera** (USDC, USDT, HBAR)
-- ✅ **Ethereum** (USDC, USDT)
-- ✅ **Polygon** (USDC, USDT)
-- ✅ **Base** (USDC)
-- ✅ **Arbitrum** (USDC, USDT)
-- ✅ **Optimism** (USDC, USDT)
+Your business account can accept payments on:
+
+### Hedera (HTS) - Primary
+- **USDC** - USD Coin
+- **USDT** - Tether
+- **HBAR** - Native Hedera token
+- Uses your business multi-sig Hedera account
+
+### EVM Chains (via Safe Global)
+All supported through your business Safe multi-sig wallets:
+
+- **Ethereum** - USDC, USDT
+- **Polygon** - USDC, USDT  
+- **Base** - USDC
+- **Arbitrum** - USDC, USDT
+- **Optimism** - USDC, USDT
+- **BSC** - USDC, USDT
+
+> 💡 **Note:** You can enable/disable specific chains in your business settings. Customers can pay using any enabled chain/token combination.
 
 ---
 
 ## 🆘 Troubleshooting
 
 ### "Invalid API Key"
-- Check your API key is correct
-- Ensure you're using the right environment (`production` vs `testnet`)
-- Regenerate key in Aureus app if needed
+- ✅ Check you're logged into your **Business Account** (not personal)
+- ✅ Verify API key was copied correctly (no extra spaces)
+- ✅ Ensure you're using the right environment (`production` vs `testnet`)
+- ✅ Regenerate key in Business Settings → Aureus Pay if needed
+- ❌ Personal account API keys won't work - must use business API key
+
+### "Business Account Required"
+- You must create a business account first
+- Go to Aureus app → Business → Create Business Account
+- Switch to business login before generating API key
 
 ### Payment not confirming
-- Wait up to 30 seconds for blockchain confirmation
-- Check customer scanned the correct QR code
-- Verify customer has sufficient balance
-- Check `payment.status` for error details
+- ⏱️ Wait up to 30 seconds for blockchain confirmation
+- 🔍 Check customer scanned the correct QR code
+- 💰 Verify customer has sufficient balance
+- 🔗 Check enabled chains match customer's wallet
+- 📊 Check `payment.status` for error details
+- 🔐 Verify business multi-sig has no pending approvals blocking settlement
 
 ### Events not firing
-- Make sure you called `payment.startListening()`
-- Check console for WebSocket connection errors
-- Verify your server allows WebSocket connections
+- ✅ Make sure you called `payment.startListening()`
+- ✅ Check console for WebSocket connection errors
+- ✅ Verify your server allows WebSocket connections
+- ✅ Ensure API key is valid and not expired
+
+### Multi-Sig Issues
+- If payments pending approval, check business dashboard
+- Ensure sufficient signers are available
+- Verify signature threshold configuration
+- Team members must approve via Aureus app
 
 ---
 
