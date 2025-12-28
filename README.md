@@ -536,9 +536,7 @@ All supported through your business Safe multi-sig wallets:
 
 ## 📞 Support
 
-- 📖 **Documentation:** [docs.aureus.com](https://docs.aureus.com)
-- 💬 **Discord:** [discord.gg/aureus](https://discord.gg/aureus)
-- 📧 **Email:** support@aureus.com
+- 📧 **Email:** dev@aureus.money
 - 🐛 **Issues:** [GitHub Issues](https://github.com/aureus-wallet/aureus-pay-sdk/issues)
 
 ---
@@ -552,11 +550,9 @@ MIT License - see [LICENSE](LICENSE) file for details
 ## 🎉 Examples
 
 Check out complete examples:
-- [React E-commerce](./examples/react-ecommerce)
-- [Express API](./examples/express-api)
-- [Next.js Full Stack](./examples/nextjs-fullstack)
+- [React E-commerce](./examples/aureus-pay-dash)
 
 ---
 
 **Made with ❤️ by Aureus**  
-[Website](https://aureus.com) • [GitHub](https://github.com/aureus-wallet) • [Twitter](https://twitter.com/aureuswallet)
+[Website](https://aureus.money)
