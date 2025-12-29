@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const CartContext = createContext();
 
@@ -12,6 +12,30 @@ export const useCart = () => {
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('aureus_cart');
+    if (savedCart) {
+      try {
+        const parsed = JSON.parse(savedCart);
+        setCartItems(parsed);
+        console.log('🛒 Cart loaded from localStorage:', parsed);
+      } catch (error) {
+        console.error('Failed to load cart:', error);
+      }
+    }
+  }, []);
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      localStorage.setItem('aureus_cart', JSON.stringify(cartItems));
+      console.log('💾 Cart saved to localStorage');
+    } else {
+      localStorage.removeItem('aureus_cart');
+    }
+  }, [cartItems]);
 
   const addToCart = (product) => {
     setCartItems(prev => {
@@ -45,6 +69,8 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = () => {
     setCartItems([]);
+    localStorage.removeItem('aureus_cart');
+    console.log('🗑️ Cart cleared');
   };
 
   const getCartTotal = () => {

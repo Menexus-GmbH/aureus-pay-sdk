@@ -10,9 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "aureus-pay": "^1.0.1",
+    "aureus-pay": "^2.0.0",
     "clsx": "^2.1.1",
     "events": "^3.3.0",
+    "firebase": "^12.7.0",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

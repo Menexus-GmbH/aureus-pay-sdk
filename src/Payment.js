@@ -1,20 +1,16 @@
-
-
-import  EventEmitter from 'events'
-import { onSnapshot, doc } from 'firebase/firestore';
-
+import EventEmitter from 'events';
 
 class Payment extends EventEmitter {
   constructor(data, db) {
     super();
     
-     // Payment data (handle both formats)
+    // Payment data
     this.id = data.paymentId || data.id;
     this.paymentId = data.paymentId || data.id;
     this.status = data.status;
     this.amount = data.amount;
     this.currency = data.currency;
-    this.userId = data.userId;
+    this.uId = data.uId;
     this.userEmail = data.userEmail || null;
     this.userName = data.userName || null;
     
@@ -31,63 +27,82 @@ class Payment extends EventEmitter {
     // Transaction info
     this.txHash = data.txHash || null;
     
-    // Timestamps (convert to Date if they're numbers)
+    // Timestamps
     this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
     this.expiresAt = data.expiresAt ? new Date(data.expiresAt) : null;
     this.confirmedAt = data.confirmedAt ? new Date(data.confirmedAt) : null;
     this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
     
-    // Firebase
-    this.db = db;
-    this.listener = null;
-  
+    // Polling (no Firestore needed)
+    this.pollingInterval = null;
+    this.apiClient = null;
   }
   
-  // Start listening for status changes
-  // Start listening for status changes
-startListening() {
-  if (this.listener) return; // Already listening
-  
-  const docRef = doc(this.db, 'payments', this.id);
-  
-  this.listener = onSnapshot(docRef, (snapshot) => {
-    if (!snapshot.exists()) return;
-    
-    const data = snapshot.data();
-    const oldStatus = this.status;
-    const newStatus = data.status;
-    
-    // Update internal state
-    this.status = newStatus;
-    this.txHash = data.txHash || null;
-    this.confirmedAt = data.confirmedAt ? new Date(data.confirmedAt) : null;
-    
-    // Emit events if status changed
-    if (oldStatus !== newStatus) {
-      this.emit('status_change', newStatus);
-      
-      // Emit specific status events
-      if (newStatus === 'confirmed') {
-        this.emit('confirmed', data);
-        this.stopListening(); // Stop after confirmed
-      } else if (newStatus === 'expired') {
-        this.emit('expired');
-        this.stopListening(); // Stop after expired
-      } else if (newStatus === 'failed') {
-        this.emit('failed', data);
-        this.stopListening(); // Stop after failed
-      }
+  // Start polling for status changes
+  startListening(apiClient, intervalMs = 3000) {
+    if (this.pollingInterval) {
+      console.log('[Payment] Already listening');
+      return;
     }
-  }, (error) => {
-    this.emit('error', error);
-  });
-}
+    
+    if (!apiClient) {
+      throw new Error('API client is required for startListening');
+    }
+    
+    this.apiClient = apiClient;
+    
+    console.log(`[Payment] Starting to poll every ${intervalMs}ms`);
+    
+    this.pollingInterval = setInterval(async () => {
+      try {
+        const response = await this.apiClient.get('/getPayment', {
+          params: { id: this.id }
+        });
+        
+        const data = response.data;
+        const oldStatus = this.status;
+        const newStatus = data.status;
+        
+        // Update internal state
+        this.status = newStatus;
+        this.txHash = data.txHash || null;
+        this.confirmedAt = data.confirmedAt ? new Date(data.confirmedAt) : null;
+        this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+        
+        // Emit events if status changed
+        if (oldStatus !== newStatus) {
+          console.log(`[Payment] Status changed: ${oldStatus} → ${newStatus}`);
+          this.emit('status_change', newStatus);
+          
+          // Emit specific status events
+          if (newStatus === 'confirmed') {
+            this.emit('confirmed', data);
+            this.stopListening(); // Stop after confirmed
+          } else if (newStatus === 'expired') {
+            this.emit('expired');
+            this.stopListening(); // Stop after expired
+          } else if (newStatus === 'failed') {
+            this.emit('failed', data);
+            this.stopListening(); // Stop after failed
+          } else if (newStatus === 'cancelled') {
+            this.emit('cancelled', data);
+            this.stopListening(); // Stop after cancelled
+          }
+        }
+        
+      } catch (error) {
+        console.error('[Payment] Polling error:', error.message);
+        this.emit('error', error);
+      }
+    }, intervalMs);
+  }
   
-  // Stop listening
+  // Stop polling
   stopListening() {
-    if (this.listener) {
-      this.listener(); // Unsubscribe
-      this.listener = null;
+    if (this.pollingInterval) {
+      console.log('[Payment] Stopping polling');
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
   }
   
@@ -108,18 +123,27 @@ startListening() {
   
   // Check if expired
   isExpired() {
+    if (!this.expiresAt) return false;
     return Date.now() > this.expiresAt.getTime();
   }
   
-  // Refresh status from server (manual)
+  // Manual refresh
   async refresh(apiClient) {
+    if (!apiClient) {
+      throw new Error('API client is required for refresh');
+    }
+    
     try {
-      const response = await apiClient.get(`/payments/${this.id}`);
+      const response = await apiClient.get('/getPayment', {
+        params: { id: this.id }
+      });
+      
       const data = response.data;
       
       this.status = data.status;
       this.txHash = data.txHash || null;
       this.confirmedAt = data.confirmedAt ? new Date(data.confirmedAt) : null;
+      this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
       
       return this;
     } catch (error) {
@@ -128,4 +152,4 @@ startListening() {
   }
 }
 
-export default Payment; 
+export default Payment;

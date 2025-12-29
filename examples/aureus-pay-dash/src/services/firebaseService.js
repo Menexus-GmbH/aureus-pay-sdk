@@ -1,23 +1,37 @@
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { getTokensForChain } from '../data/products';
 
-export const fetchBusinessData = async (aureusInstance) => {
+export const fetchBusinessData = async (apiKey) => {
   try {
-    const userId = aureusInstance.user?.uid;
+    // Decode JWT to get uId
+    const parts = apiKey.split('.');
+    
+    if (parts.length !== 3) {
+      throw new Error('Invalid API key format');
+    }
+
+    const payload = JSON.parse(atob(parts[1]));
+    const userId = payload.uId;
     
     if (!userId) {
-      throw new Error('No authenticated user found');
+      throw new Error('No user ID found in API key');
     }
     
     console.log('🔵 Fetching data for business:', userId);
     
     const db = getFirestore();
-    const businessDoc = await getDoc(doc(db, 'Users', userId));
     
-    if (!businessDoc.exists()) {
+    // Query Users collection by uId field
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+    const usersRef = collection(db, 'Users');
+    const q = query(usersRef, where('uId', '==', userId));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
       throw new Error('Business not found');
     }
     
+    const businessDoc = querySnapshot.docs[0];
     const data = businessDoc.data();
     console.log('📄 Business data:', data);
     

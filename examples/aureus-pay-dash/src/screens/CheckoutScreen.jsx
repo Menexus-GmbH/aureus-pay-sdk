@@ -24,52 +24,96 @@ const CheckoutScreen = ({ onBack }) => {
   const [localSelectedChains, setLocalSelectedChains] = useState([]);
   const [isInitializing, setIsInitializing] = useState(false);
 
-  // Initialize terminal and fetch business info
+  // Initialize terminal once
   useEffect(() => {
     const initTerminal = async () => {
-      if (!terminal && apiKey) {
-        setIsInitializing(true);
-        try {
-          const { initializeAureus } = await import('../services/aureusService');
-          const { instance, businessData } = await initializeAureus(apiKey, () => {});
-          setTerminal(instance);
-          setBusinessInfo(businessData);
-          setAvailableChains(businessData.chains || []);
-          
-          // Only set local chains if already saved in settings
-          if (selectedChains && selectedChains.length > 0) {
-            setLocalSelectedChains(selectedChains);
-          }
-        } catch (error) {
-          console.error('Failed to initialize terminal:', error);
-        } finally {
-          setIsInitializing(false);
+      console.log('🔍 Init check - terminal:', !!terminal, 'apiKey:', !!apiKey);
+      
+      // Skip if already initialized
+      if (terminal) {
+        console.log('✅ Terminal already exists');
+        if (businessInfo?.chains) {
+          setAvailableChains(businessInfo.chains);
         }
-      } else if (businessInfo?.chains) {
-        setAvailableChains(businessInfo.chains);
-        // Sync with saved chains
+        if (selectedChains?.length > 0) {
+          setLocalSelectedChains(selectedChains);
+        }
+        return;
+      }
+
+      // Skip if no API key
+      if (!apiKey) {
+        console.log('⚠️ No API key');
+        return;
+      }
+
+      setIsInitializing(true);
+      try {
+        console.log('🔵 Initializing terminal...');
+        
+        const { initializeAureus } = await import('../services/aureusService');
+        const { instance, businessData } = await initializeAureus(
+          apiKey, 
+          (type, msg) => console.log(`[${type}]`, msg)
+        );
+        
+        console.log('✅ Terminal created:', instance);
+        console.log('✅ Business data:', businessData);
+        
+        setTerminal(instance);
+        setBusinessInfo(businessData);
+        setAvailableChains(businessData.chains || []);
+        
+        // Save to localStorage
+        saveSettings(apiKey, businessData, true, selectedChains || []);
+        
+        // Load saved chains
         if (selectedChains && selectedChains.length > 0) {
           setLocalSelectedChains(selectedChains);
         }
+        
+      } catch (error) {
+        console.error('❌ Init failed:', error);
+        alert(`Failed to initialize: ${error.message}`);
+      } finally {
+        setIsInitializing(false);
       }
     };
+    
     initTerminal();
-  }, [terminal, apiKey, selectedChains, setTerminal, setBusinessInfo, businessInfo]);
+  }, [apiKey]); // Only run when apiKey changes
 
+  // Sync chains when businessInfo/selectedChains change
+  useEffect(() => {
+    if (businessInfo?.chains) {
+      setAvailableChains(businessInfo.chains);
+    }
+    if (selectedChains?.length > 0) {
+      setLocalSelectedChains(selectedChains);
+    }
+  }, [businessInfo, selectedChains]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (activePayment) {
-        stopPaymentListeners(activePayment);
+        stopPaymentListeners(activePayment, () => {});
       }
     };
   }, [activePayment]);
 
   const handlePayWithAureus = () => {
     console.log('🔵 Pay button clicked');
+    console.log('🔵 Terminal:', !!terminal);
     console.log('🔵 localSelectedChains:', localSelectedChains);
     console.log('🔵 availableChains:', availableChains);
     
-    // Always show chain selection first
+    if (!terminal) {
+      alert('Please wait for terminal to initialize');
+      return;
+    }
+    
+    // Show chain selection if no chains selected
     if (!localSelectedChains || localSelectedChains.length === 0) {
       console.log('🔵 No chains selected - showing selection modal');
       setShowChainSelection(true);
@@ -83,7 +127,7 @@ const CheckoutScreen = ({ onBack }) => {
     if (localSelectedChains.length === 0) return;
     
     // Save selected chains
-    saveSettings(apiKey, localSelectedChains, true, terminal, businessInfo);
+    saveSettings(apiKey, businessInfo, true, localSelectedChains);
     setShowChainSelection(false);
     handleCreatePayment();
   };
@@ -99,7 +143,19 @@ const CheckoutScreen = ({ onBack }) => {
   };
 
   const handleCreatePayment = async () => {
-    if (!terminal || cartItems.length === 0) return;
+    // Validate
+    if (!terminal) {
+      console.error('❌ Terminal not initialized');
+      alert('Please wait for terminal to initialize');
+      return;
+    }
+    
+    if (cartItems.length === 0) {
+      console.error('❌ Cart is empty');
+      return;
+    }
+
+    console.log('🔵 Creating payment with terminal:', terminal);
 
     setIsCreating(true);
     setShowSuccess(false);
@@ -113,34 +169,46 @@ const CheckoutScreen = ({ onBack }) => {
     };
 
     try {
-      const payment = await createPayment(terminal, orderData, localSelectedChains, () => {});
+      const payment = await createPayment(
+        terminal, 
+        orderData, 
+        localSelectedChains, 
+        (type, msg) => console.log(`[${type}]`, msg)
+      );
 
+      console.log('✅ Payment created:', payment);
       setActivePayment(payment);
       setPaymentStatus('pending');
 
       setupPaymentListeners(
         payment,
+        terminal,
         {
           onStatusChange: (status) => {
+            console.log('📊 Status:', status);
             setPaymentStatus(status);
           },
           onConfirmed: (paymentData) => {
+            console.log('✅ Confirmed:', paymentData);
             setPaymentStatus('confirmed');
             setActivePayment(paymentData);
             setShowSuccess(true);
           },
           onExpired: () => {
+            console.log('⏰ Expired');
             setPaymentStatus('expired');
           },
           onCancelled: () => {
+            console.log('🚫 Cancelled');
             setPaymentStatus('cancelled');
           }
         },
-        () => {}
+        (type, msg) => console.log(`[${type}]`, msg)
       );
 
     } catch (error) {
-      console.error('Payment creation failed:', error);
+      console.error('❌ Payment creation failed:', error);
+      alert(`Payment failed: ${error.message}`);
     } finally {
       setIsCreating(false);
     }
@@ -148,7 +216,7 @@ const CheckoutScreen = ({ onBack }) => {
 
   const handleNewTransaction = () => {
     if (activePayment) {
-      stopPaymentListeners(activePayment);
+      stopPaymentListeners(activePayment, () => {});
     }
     setActivePayment(null);
     setPaymentStatus(null);
@@ -202,14 +270,18 @@ const CheckoutScreen = ({ onBack }) => {
               </div>
 
               {!activePayment && (
-                <Button
-                  onClick={handlePayWithAureus}
-                  disabled={isCreating || isInitializing}
-                  isLoading={isCreating || isInitializing}
-                  className="w-full"
-                >
-                  Pay with Aureus Pay
-                </Button>
+                <>
+                  
+
+                  <Button
+                    onClick={handlePayWithAureus}
+                    disabled={isCreating || isInitializing || !terminal}
+                    isLoading={isCreating || isInitializing}
+                    className="w-full"
+                  >
+                    {!terminal ? 'Initializing Terminal...' : 'Pay with Aureus Pay'}
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -265,18 +337,34 @@ const CheckoutScreen = ({ onBack }) => {
                     <span>Scan QR code to pay</span>
                   </div>
                 )}
+                        {activePayment && paymentStatus !== 'confirmed' && (
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                            stopPaymentListeners(activePayment, () => {});
+                            setActivePayment(null);
+                            setPaymentStatus(null);
+                            }}
+                            className="w-full"
+                        >
+                            Cancel Payment
+                        </Button>
+                        )}
 
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    stopPaymentListeners(activePayment);
-                    setActivePayment(null);
-                    setPaymentStatus(null);
-                  }}
-                  className="w-full"
-                >
-                  Cancel Payment
-                </Button>
+                        {paymentStatus === 'confirmed' && (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
+                            <CheckCircle2 className="h-6 w-6" />
+                            <span className="font-semibold">Payment Confirmed!</span>
+                            </div>
+                            <Button
+                            onClick={handleNewTransaction}
+                            className="w-full bg-green-600 hover:bg-green-700"
+                            >
+                            New Transaction
+                            </Button>
+                        </div>
+                        )}
               </div>
             ) : (
               <div className="text-center py-12 text-slate-400">
@@ -305,7 +393,6 @@ const CheckoutScreen = ({ onBack }) => {
         {showChainSelection && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              {/* Header with back button */}
               <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center gap-3">
                   <button

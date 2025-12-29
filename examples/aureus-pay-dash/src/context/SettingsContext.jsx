@@ -26,7 +26,9 @@ export const SettingsProvider = ({ children }) => {
         setApiKey(parsed.apiKey || '');
         setSelectedChains(parsed.selectedChains || []);
         setIsConfigured(parsed.isConfigured || false);
-        setBusinessInfo(parsed.businessInfo || null);
+        setBusinessInfo(parsed.businessInfo || null);  // ← Load businessInfo
+        
+        console.log('✅ Settings loaded from localStorage:', parsed);
       } catch (error) {
         console.error('Failed to load settings:', error);
       }
@@ -34,19 +36,22 @@ export const SettingsProvider = ({ children }) => {
   }, []);
 
   // Save to localStorage when settings change
-  const saveSettings = (newApiKey, newChains, configured, newTerminal = null, newBusinessInfo = null) => {
+  const saveSettings = (newApiKey, newBusinessInfo = null, configured = true, newChains = []) => {
     const settings = {
       apiKey: newApiKey,
       selectedChains: newChains,
       isConfigured: configured,
-      businessInfo: newBusinessInfo
+      businessInfo: newBusinessInfo  // ← Save businessInfo
     };
+    
     localStorage.setItem('aureus_settings', JSON.stringify(settings));
+    
     setApiKey(newApiKey);
     setSelectedChains(newChains);
     setIsConfigured(configured);
-    if (newTerminal) setTerminal(newTerminal);
-    if (newBusinessInfo) setBusinessInfo(newBusinessInfo);
+    setBusinessInfo(newBusinessInfo);
+    
+    console.log('✅ Settings saved:', settings);
   };
 
   const clearSettings = () => {
@@ -56,6 +61,8 @@ export const SettingsProvider = ({ children }) => {
     setBusinessInfo(null);
     setSelectedChains([]);
     setIsConfigured(false);
+    
+    console.log('🗑️ Settings cleared');
   };
 
   return (

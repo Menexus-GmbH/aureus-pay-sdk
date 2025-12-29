@@ -1,45 +1,46 @@
 import axios from 'axios';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
 import Payment from './Payment.js';
-
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCO3ybDZLqrphevvfzWNnb-7fHU-EFK3Ls",
-  authDomain: "aureus-money.firebaseapp.com",
-  projectId: "aureus-money",
-  storageBucket: "aureus-money.appspot.com",
-  messagingSenderId: "732676537783",
-  measurementId: 'G-HSMLXNDWCR',
-  appId: "1:732676537783:web:39c26fb75d1a8e25a1bc32"
-};
 
 const BASE_URL = 'https://us-central1-aureus-money.cloudfunctions.net';
 
 class AureusPay {
   constructor(config) {
-    if (!config.customToken) {
-      throw new Error('Custom auth token is required. Get it from your Aureus dashboard.');
+    if (!config.apiKey) {
+      throw new Error('API key is required. Get it from your Aureus dashboard.');
     }
     
-    this.customToken = config.customToken;
+    this.apiKey = config.apiKey;
     this.baseURL = BASE_URL;
-    this.authenticated = false;
     this.debug = config.debug || false;
     
-    if (getApps().length === 0) {
-      initializeApp(FIREBASE_CONFIG);
-    }
+    // Create axios client with JWT
+    this.apiClient = axios.create({
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    });
     
-    this.auth = getAuth();
-    this.db = getFirestore();
-    this.authPromise = this.authenticate();
+    // Error interceptor (no token refresh needed with JWT)
+    this.apiClient.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          this._log('❌ API key invalid or expired. Please generate a new one.');
+        }
+        return Promise.reject(error);
+      }
+    );
     
     this.payments = {
       create: this.createPayment.bind(this),
       get: this.getPayment.bind(this),
       cancel: this.cancelPayment.bind(this)
     };
+    
+    this._log('✅ AureusPay initialized');
   }
   
   _log(...args) {
@@ -48,54 +49,7 @@ class AureusPay {
     }
   }
   
-  async authenticate() {
-    try {
-      const userCredential = await signInWithCustomToken(this.auth, this.customToken);
-      this.user = userCredential.user;
-      
-      const idToken = await userCredential.user.getIdToken();
-      
-      this._log('✅ Authenticated as:', userCredential.user.uid);
-      
-      this.apiClient = axios.create({
-        baseURL: this.baseURL,
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-      
-      // Auto-refresh expired tokens
-      this.apiClient.interceptors.response.use(
-        (response) => response,
-        async (error) => {
-          if (error.response?.status === 401 && this.user) {
-            this._log('🔄 Refreshing token...');
-            try {
-              const newToken = await this.user.getIdToken(true);
-              error.config.headers['Authorization'] = `Bearer ${newToken}`;
-              return this.apiClient.request(error.config);
-            } catch (refreshError) {
-              return Promise.reject(refreshError);
-            }
-          }
-          return Promise.reject(error);
-        }
-      );
-      
-      this.authenticated = true;
-      return idToken;
-      
-    } catch (error) {
-      this._log('❌ Authentication failed:', error.message);
-      throw new Error(`Authentication failed: ${error.message}`);
-    }
-  }
-  
   async createPayment(data) {
-    await this.authPromise;
-    
     // Validate
     if (!data.amount || !data.currency) {
       throw new Error('amount and currency are required');
@@ -113,7 +67,7 @@ class AureusPay {
         metadata: data.metadata || {}
       });
       
-      return new Payment(response.data, this.db);
+      return new Payment(response.data, null); // No Firestore in SDK anymore
       
     } catch (error) {
       if (error.response) {
@@ -128,8 +82,6 @@ class AureusPay {
   }
 
   async getPayment(paymentId) {
-    await this.authPromise;
-    
     if (!paymentId) {
       throw new Error('paymentId is required');
     }
@@ -139,7 +91,7 @@ class AureusPay {
         params: { id: paymentId }
       });
       
-      return new Payment(response.data, this.db);
+      return new Payment(response.data, null);
       
     } catch (error) {
       if (error.response) {
@@ -151,8 +103,6 @@ class AureusPay {
   }
 
   async cancelPayment(paymentId) {
-    await this.authPromise;
-    
     if (!paymentId) {
       throw new Error('paymentId is required');
     }
@@ -162,7 +112,7 @@ class AureusPay {
         paymentId: paymentId
       });
       
-      return new Payment(response.data, this.db);
+      return new Payment(response.data, null);
       
     } catch (error) {
       if (error.response) {
